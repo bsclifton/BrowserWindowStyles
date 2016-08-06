@@ -97,12 +97,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       if (!SendMessage(hWnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&info)) {
         return FALSE;
       }
+      //could alternatively get size via
+      // http://stackoverflow.com/questions/479332/how-to-get-size-and-position-of-window-caption-buttons-minimise-restore-close
       int closeWidth = info.rgrect[BSC_CLOSE].right - info.rgrect[BSC_CLOSE].left;
       int closeHeight = info.rgrect[BSC_CLOSE].bottom - info.rgrect[BSC_CLOSE].top;
       int maximizeWidth = info.rgrect[BSC_MAXMIZE].right - info.rgrect[BSC_MAXMIZE].left;
       int maximizeHeight = info.rgrect[BSC_MAXMIZE].bottom - info.rgrect[BSC_MAXMIZE].top;
       int minimizeWidth = info.rgrect[BSC_MINIMIZE].right - info.rgrect[BSC_MINIMIZE].left;
       int minimizeHeight = info.rgrect[BSC_MINIMIZE].bottom - info.rgrect[BSC_MINIMIZE].top;
+
+      RECT rectCloseButton2;
+      rectCloseButton2.left = rectClient.right - closeWidth;
+      rectCloseButton2.right = rectClient.right;
+      rectCloseButton2.top = 20;
+      rectCloseButton2.bottom = rectCloseButton2.top + closeHeight;
+
+      RECT rectMaximizeButton2;
+      rectMaximizeButton2.right = rectCloseButton2.left;
+      rectMaximizeButton2.left = rectMaximizeButton2.right - maximizeWidth;
+      rectMaximizeButton2.top = 20;
+      rectMaximizeButton2.bottom = rectMaximizeButton2.top + maximizeHeight;
+
+      RECT rectMinimizeButton2;
+      rectMinimizeButton2.right = rectMaximizeButton2.left;
+      rectMinimizeButton2.left = rectMinimizeButton2.right - minimizeWidth;
+      rectMinimizeButton2.top = 20;
+      rectMinimizeButton2.bottom = rectMinimizeButton2.top + minimizeHeight;
 
       /*
       //another way to get size/bounds for the min/max/close buttons
@@ -114,43 +134,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         closeHeight = bounds.bottom - bounds.top;
       }*/
 
-      /*
+      
       //didn't get a chance to look at this all the way
 
-      HTHEME hTheme = OpenThemeData(hWnd, L"DWMWINDOW");
-      RECT rectMin;
+      HTHEME hTheme;
+      //hTheme = OpenThemeData(hWnd, L"DWMWINDOW");
+      /*RECT rectMin;
+      DWORD BufSize;
+      BYTE PBuf[1024 * 1024];
       GetThemeRect(hTheme, WP_MINCAPTION, MNCS_ACTIVE, TMT_ATLASRECT, &rectMin);
-      //GetThemeStream(...);
-      CloseThemeData(hTheme);
-      FillRect(hDC, &rectMin, (HBRUSH)GetStockObject(GRAY_BRUSH));
-      */
+      HINSTANCE hInstance = GetModuleHandle(NULL);
+      GetThemeStream(hTheme, WP_MINCAPTION, MNCS_ACTIVE, TMT_ATLASRECT, (VOID**)&PBuf, &BufSize, hInstance);*/
+      //CloseThemeData(hTheme);
+     
 
 
       //http://stackoverflow.com/questions/34004819/windows-10-close-minimize-and-maximize-buttons
-      SetWindowTheme(hWnd, L"explorer", NULL);
-      HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
-
-      RECT rectCloseButton2;
-      rectCloseButton2.left = rectClient.right - closeWidth;
-      rectCloseButton2.right = rectClient.right;
-      rectCloseButton2.top = 20;
-      rectCloseButton2.bottom = rectCloseButton2.top + closeHeight;
+      SetWindowTheme(hWnd, L"EXPLORER", NULL);
+      hTheme = OpenThemeData(hWnd, L"WINDOW");
       DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, CBS_NORMAL, &rectCloseButton2, NULL);
-
-      RECT rectMaximizeButton2;
-      rectMaximizeButton2.right = rectCloseButton2.left;
-      rectMaximizeButton2.left = rectMaximizeButton2.right - maximizeWidth;
-      rectMaximizeButton2.top = 20;
-      rectMaximizeButton2.bottom = rectMaximizeButton2.top + maximizeHeight;
       DrawThemeBackground(hTheme, hDC, WP_MAXBUTTON, MAXBS_NORMAL, &rectMaximizeButton2, NULL);
-
-      RECT rectMinimizeButton2;
-      rectMinimizeButton2.right = rectMaximizeButton2.left;
-      rectMinimizeButton2.left = rectMinimizeButton2.right - minimizeWidth;
-      rectMinimizeButton2.top = 20;
-      rectMinimizeButton2.bottom = rectMinimizeButton2.top + minimizeHeight;
       DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, MINBS_NORMAL, &rectMinimizeButton2, NULL);
-
       CloseThemeData(hTheme);
 
 
@@ -217,6 +221,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   HMENU menu = CreateMenu();
   
+  //Menu functions
+  //https://msdn.microsoft.com/en-us/library/windows/desktop/ff468865(v=vs.85).aspx
   AppendFileMenu(menu);
   AppendEditMenu(menu);
   AppendMenu(menu, NULL, NULL, L"View");
