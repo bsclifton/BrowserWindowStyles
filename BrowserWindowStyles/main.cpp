@@ -11,6 +11,7 @@
 // https://msdn.microsoft.com/en-us/library/bb688195(VS.85).aspx
 // http://www.winprog.org/tutorial/menus.html
 #define DEMO_WINDOW_CLASS_NAME L"BrowserWindowStyles"
+#define DEMO_CHILD_WINDOW_CLASS_NAME  L"BrowserWindowStyles-CHILD"
 #define DEMO_WINDOW_TITLE L"Window Title Goes Here"
 #define ID_FILE_QUIT 11
 #define ID_EDIT_TOGGLE 100
@@ -36,22 +37,37 @@ WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstri
 }
 
 //DWMNCRENDERINGPOLICY nonClientRenderingPolicy;
+CLIENTCREATESTRUCT MDIClientCreateStruct;
+#define IDM_FIRSTCHILD 1
+HWND ghMDIClientArea;
+RECT parentBounds;
+HMENU menu;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
-    //case WM_ACTIVATE: {
-    //  MARGINS margins;
-    //  margins.cxLeftWidth = 0;
-    //  margins.cxRightWidth = 0;
-    //  margins.cyBottomHeight = 0;
-    //  margins.cyTopHeight = 20;
+    case WM_CREATE: {
+      GetClientRect(hWnd, &parentBounds);
+      WINDOWINFO info;
+      GetWindowInfo(hWnd, &info);
+      
+      // attempt to create MDI frame with a menu
+      // http://www.codeproject.com/Articles/35634/A-pure-Win-based-MDI-application
+      MDIClientCreateStruct.hWindowMenu = NULL;
+      MDIClientCreateStruct.idFirstChild = IDM_FIRSTCHILD;
+      ghMDIClientArea = CreateWindow(TEXT("MDICLIENT"),
+        NULL,
+        WS_CHILD | WS_CLIPCHILDREN | WS_SYSMENU | WS_VISIBLE,
+        info.rcWindow.left + parentBounds.left,
+        info.rcWindow.top + parentBounds.top + 45,
+        parentBounds.right - parentBounds.left,
+        ((parentBounds.bottom - parentBounds.top) - 45),
+        hWnd,
+        menu,
+        GetModuleHandle(NULL),
+        (void*)&MDIClientCreateStruct);
 
-    //  //DwmExtendFrameIntoClientArea(hWnd, &margins);
-
-    //  //nonClientRenderingPolicy = DWMNCRP_DISABLED;
-    //  //DwmSetWindowAttribute(hWnd, DWMWA_NCRENDERING_POLICY, &nonClientRenderingPolicy, sizeof(nonClientRenderingPolicy));
-    //  return NULL;
-    //}
+      return NULL;
+    }
 
     case WM_PAINT: {
       PAINTSTRUCT ps;
@@ -185,6 +201,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
+LRESULT CALLBACK WndProcChild(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  switch (uMsg) {
+    case WM_SIZE:
+      //resize width/height
+      break;
+  }
+  return DefWindowProc(hWnd, uMsg, wParam, lParam);
+}
+
+
 void AppendFileMenu(HMENU parentMenu) {
   HMENU fileMenu = CreateMenu();
 
@@ -218,8 +244,9 @@ void AppendEditMenu(HMENU parentMenu) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
   WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME);
+  result = initializeWindowClass(WndProcChild, hInstance, DEMO_CHILD_WINDOW_CLASS_NAME);
 
-  HMENU menu = CreateMenu();
+  menu = CreateMenu();
   
   //Menu functions
   //https://msdn.microsoft.com/en-us/library/windows/desktop/ff468865(v=vs.85).aspx
@@ -236,16 +263,66 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     WS_EX_LEFT,
     DEMO_WINDOW_CLASS_NAME,
     DEMO_WINDOW_TITLE,
-    WS_POPUPWINDOW | WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME,
+    WS_POPUPWINDOW | WS_CAPTION | WS_CLIPCHILDREN | WS_THICKFRAME,
     CW_USEDEFAULT,
     CW_USEDEFAULT,
     640,
     480,
     HWND_DESKTOP,
-    menu,
+    NULL,
     hInstance, 0);
 
+  HWND hChild1 = CreateWindowEx(
+    WS_EX_LEFT,
+    DEMO_CHILD_WINDOW_CLASS_NAME,
+    DEMO_WINDOW_TITLE,
+    WS_CHILD,
+    parentBounds.left,
+    parentBounds.top,
+    parentBounds.right - parentBounds.left,
+    45,
+    hWnd,
+    NULL,
+    hInstance, 0);
+  /*
+  HWND hChild2 = CreateWindowEx(
+    WS_EX_LEFT,
+    DEMO_WINDOW_CLASS_NAME,
+    DEMO_WINDOW_TITLE,
+    WS_CHILD | WS_SYSMENU,
+    inside.left,
+    inside.top + 45,
+    inside.right - inside.left,
+    ((inside.bottom - inside.top) - 45),
+    hWnd,
+    menu,
+    hInstance, 0);*/
+
+  MDICREATESTRUCT MDIChildCreateStruct;
+  MDIChildCreateStruct.szClass = DEMO_CHILD_WINDOW_CLASS_NAME;
+  MDIChildCreateStruct.szTitle = TEXT("New Tab");
+  MDIChildCreateStruct.hOwner = hInstance;
+  MDIChildCreateStruct.x = CW_USEDEFAULT;
+  MDIChildCreateStruct.y = CW_USEDEFAULT;
+  MDIChildCreateStruct.cx = CW_USEDEFAULT;
+  MDIChildCreateStruct.cy = CW_USEDEFAULT;
+  MDIChildCreateStruct.style = WS_MAXIMIZE;
+  MDIChildCreateStruct.lParam = 0;
+  //create the first MDI child
+  HWND m_hwndSystemInformation = (HWND)SendMessage(ghMDIClientArea,
+    WM_MDICREATE,
+    0,
+    (LPARAM)(LPMDICREATESTRUCT)&MDIChildCreateStruct);
+
+  // return if its not possible to create the child window
+  //if (NULL == m_hwndSystemInformation) {
+  //  return 0;
+  //}
+
+
   ShowWindow(hWnd, nCmdShow);
+  ShowWindow(hChild1, nCmdShow);
+  //ShowWindow(hChild2, nCmdShow);
   UpdateWindow(hWnd);
 
   MSG msg;
@@ -256,6 +333,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   DestroyWindow(hWnd);
   UnregisterClass(DEMO_WINDOW_CLASS_NAME, hInstance);
+  UnregisterClass(DEMO_CHILD_WINDOW_CLASS_NAME, hInstance);
 
   return (int)msg.wParam;
 }
