@@ -28,6 +28,12 @@
 #define DEMO_TITLE_BAR_HELP 4
 #define DEMO_TITLE_BAR_CLOSE 5
 
+RECT minimizeButtonRect;
+RECT maximizeButtonRect;
+RECT closeButtonRect;
+RECT menuRect;
+HRGN menuRegion = NULL;
+
 WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstring className) {
   WNDCLASSEX windowClass;
 
@@ -51,76 +57,22 @@ WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstri
 void RenderViaDrawFrameControl(HDC hDC, RECT& rectClient) {
   // DrawFrameControl - parts and states reference
   // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773210(v=vs.85).aspx
-  RECT rectMinimizeButton;
-  rectMinimizeButton.left = rectClient.right - 60;
-  rectMinimizeButton.right = rectClient.right - 40;
-  rectMinimizeButton.top = 0;
-  rectMinimizeButton.bottom = 40;
-  DrawFrameControl(hDC, &rectMinimizeButton, DFC_CAPTION, DFCS_CAPTIONMIN);
-
-  RECT rectMaximizeButton;
-  rectMaximizeButton.left = rectClient.right - 40;
-  rectMaximizeButton.right = rectClient.right - 20;
-  rectMaximizeButton.top = 0;
-  rectMaximizeButton.bottom = 40;
-  DrawFrameControl(hDC, &rectMaximizeButton, DFC_CAPTION, DFCS_CAPTIONMAX);
-
-  RECT rectCloseButton;
-  rectCloseButton.left = rectClient.right - 20;
-  rectCloseButton.right = rectClient.right;
-  rectCloseButton.top = 0;
-  rectCloseButton.bottom = 40;
-  DrawFrameControl(hDC, &rectCloseButton, DFC_CAPTION, DFCS_CAPTIONCLOSE);
+  DrawFrameControl(hDC, &minimizeButtonRect, DFC_CAPTION, DFCS_CAPTIONMIN);
+  DrawFrameControl(hDC, &maximizeButtonRect, DFC_CAPTION, DFCS_CAPTIONMAX);
+  DrawFrameControl(hDC, &closeButtonRect, DFC_CAPTION, DFCS_CAPTIONCLOSE);
 }
 
-RECT menuRect;
-HRGN menuRegion = NULL;
-
-//https://msdn.microsoft.com/en-us/library/windows/desktop/ms632606(v=vs.85).aspx
-LRESULT OnCalcSizeNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
-  if (wParam) {
-    //the first rectangle contains the new coordinates of a window that has been moved or resized, that is, it is the proposed new window coordinates
-    //The second contains the coordinates of the window before it was moved or resized.
-    //The third contains the coordinates of the window's client area before the window was moved or resized.
-    //
-    //If the window is a child window, the coordinates are relative to the client area of the parent window.
-    //If the window is a top-level window, the coordinates are relative to the screen origin.
-    //
-    //When the window procedure returns, the first rectangle contains the coordinates of the new client rectangle resulting from the move or resize.
-    //The second rectangle contains the valid destination rectangle, and the third rectangle contains the valid source rectangle.
-    //The last two rectangles are used in conjunction with the return value of the WM_NCCALCSIZE message to determine the area of the window to be preserved.
-    NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
-
-    params->rgrc[0].top = 0;
-    /*if (params->rgrc[2].top > params->rgrc[0].top && params->rgrc[2].bottom < params->rgrc[0].bottom) {
-    params->rgrc[2].top = 35;
-    //return WVR_VALIDRECTS;
-    }*/
-    return WVR_VALIDRECTS;
-
-  } else {
-    // On entry, the structure contains the proposed window rectangle for the window.
-    // On exit, the structure should contain the screen coordinates of the corresponding window client area.
-    RECT* rect = (LPRECT)lParam;
-
-    // Overwrite the menu's client area.
-    rect->top = 0;
-    //rect->top = -menuRect.bottom;
-    return WVR_VALIDRECTS;
-  }
-
-  return DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
-}
-
+// https://msdn.microsoft.com/en-us/library/windows/desktop/ms645618(v=vs.85).aspx
 LRESULT OnHitTestNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   RECT windowRect;
   GetWindowRect(hWnd, &windowRect);
 
   POINT point = { GET_X_LPARAM(lParam) - windowRect.left, GET_Y_LPARAM(lParam) - windowRect.top };
 
-  if (PtInRect(&menuRect, point)) {
-    return HTMENU;
-  }
+  if (PtInRect(&menuRect, point)) { return HTMENU; }
+  if (PtInRect(&closeButtonRect, point)) { return HTCLOSE; }
+  if (PtInRect(&maximizeButtonRect, point)) { return HTMAXBUTTON; }
+  if (PtInRect(&minimizeButtonRect, point)) { return HTMINBUTTON; }
 
   RECT clientRect;
   GetClientRect(hWnd, &clientRect);
@@ -156,8 +108,6 @@ LRESULT OnHitTestNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
 }
 
 LRESULT OnPaint(HWND hWnd) {
-  //DrawMenuBar(hWnd);
-
 	PAINTSTRUCT ps;
 	HDC hDC = BeginPaint(hWnd, &ps);
 
@@ -165,44 +115,59 @@ LRESULT OnPaint(HWND hWnd) {
   GetClientRect(hWnd, &clientRect);
   clientRect.top += menuRect.bottom;
 	FillRect(hDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
-	RenderViaDrawFrameControl(hDC, clientRect);
 	EndPaint(hWnd, &ps);
-
-  // TODO: redraw menu
-  
-  /*RECT windowRect;
-  GetWindowRect(hWnd, &windowRect);
-  menuRegion = CreateRectRgn(
-    windowRect.left + menuRect.left,
-    windowRect.top + menuRect.top,
-    windowRect.left + menuRect.right,
-    windowRect.top + 150
-  );
-  SendMessage(hWnd, WM_NCPAINT, (WPARAM)menuRegion, NULL);*/
-  //DeleteObject(menuRegion);
-  //RedrawWindow(hWnd, NULL, NULL, RDW_FRAME | RDW_INVALIDATE);
-  //RedrawWindow(hWnd, NULL, NULL, RDW_NOFRAME | RDW_VALIDATE);
 
 	return NULL;
 }
 
+// https://msdn.microsoft.com/en-us/library/windows/desktop/dd145212(v=vs.85).aspx
+LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
+  // Force default painting for non-client area
+  LRESULT result = DefWindowProc(hWnd, WM_NCPAINT, wParam, lParam);
+  
+  // Custom non-client area painting goes here
+  RECT windowRect;
+  HRGN hrgn;
+  GetWindowRect(hWnd, &windowRect);
+  if (wParam == 1) {
+    hrgn = CreateRectRgnIndirect(&windowRect);
+  } else {
+    hrgn = (HRGN)wParam;
+  }
+
+  // https://msdn.microsoft.com/en-us/library/windows/desktop/dd144873(v=vs.85).aspx
+  HDC hDC = GetDCEx(hWnd, hrgn, DCX_WINDOW | DCX_INTERSECTRGN);
+  windowRect.left = windowRect.right - ((windowRect.right - windowRect.left) - menuRect.right);
+  windowRect.bottom = windowRect.top + menuRect.bottom;
+  FillRect(hDC, &windowRect, (HBRUSH)GetStockObject(GRAY_BRUSH));
+  RenderViaDrawFrameControl(hDC, windowRect);
+  ReleaseDC(hWnd, hDC);
+
+  return NULL;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
-    /*case WM_SIZE: {
-      DrawMenuBar(hWnd);
-    } break;
-    case WM_MEASUREITEM: {
-      int CtlID = wParam;
-      MEASUREITEMSTRUCT* measureItem = (MEASUREITEMSTRUCT*)lParam;
-      measureItem->itemWidth = 40;
-      int fffff = 0;
-      int ffggg = fffff;
-    } break;*/
-
-    case WM_NCCALCSIZE:
-      return OnCalcSizeNCA(hWnd, wParam, lParam);
+    case WM_SIZE: {
+      RECT rectClient;
+      GetClientRect(hWnd, &rectClient);
+      minimizeButtonRect.left = rectClient.right - 60;
+      minimizeButtonRect.right = rectClient.right - 40;
+      minimizeButtonRect.top = 0;
+      minimizeButtonRect.bottom = 20;
+      maximizeButtonRect.left = rectClient.right - 40;
+      maximizeButtonRect.right = rectClient.right - 20;
+      maximizeButtonRect.top = 0;
+      maximizeButtonRect.bottom = 20;
+      closeButtonRect.left = rectClient.right - 20;
+      closeButtonRect.right = rectClient.right;
+      closeButtonRect.top = 0;
+      closeButtonRect.bottom = 20;
+      } break;
     case WM_NCHITTEST:
       return OnHitTestNCA(hWnd, wParam, lParam);
+    case WM_NCPAINT:
+      return OnPaintNCA(hWnd, wParam, lParam);
     case WM_PAINT:
       return OnPaint(hWnd);
 
@@ -267,7 +232,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
   menuRect.left = 0;
   menuRect.bottom = GetSystemMetrics(SM_CYMENU);
   menuRect.top = 0;
-  menuRect.right = 300;//TODO: get proper menu size
+  menuRect.right = 380; //TODO: get proper menu size
 
   HMENU menu = CreateMenu();
   
