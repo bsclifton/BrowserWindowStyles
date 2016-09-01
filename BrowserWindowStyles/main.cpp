@@ -62,6 +62,19 @@ void RenderViaDrawFrameControl(HDC hDC, RECT& rectClient) {
   DrawFrameControl(hDC, &closeButtonRect, DFC_CAPTION, DFCS_CAPTIONCLOSE);
 }
 
+void RenderViaDrawThemeBackground(HWND hWnd, HDC hDC) {
+  // Calls I discovered via:
+  // http://stackoverflow.com/questions/34004819/windows-10-close-minimize-and-maximize-buttons
+  // Reference:
+  // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
+  SetWindowTheme(hWnd, L"EXPLORER", NULL);
+  HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
+  DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, CBS_NORMAL, &closeButtonRect, NULL);
+  DrawThemeBackground(hTheme, hDC, WP_MAXBUTTON, MAXBS_NORMAL, &maximizeButtonRect, NULL);
+  DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, MINBS_NORMAL, &minimizeButtonRect, NULL);
+  CloseThemeData(hTheme);
+}
+
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms645618(v=vs.85).aspx
 LRESULT OnHitTestNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   RECT windowRect;
@@ -138,32 +151,90 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   // https://msdn.microsoft.com/en-us/library/windows/desktop/dd144873(v=vs.85).aspx
   HDC hDC = GetDCEx(hWnd, hrgn, DCX_WINDOW | DCX_INTERSECTRGN);
   windowRect.left = windowRect.right - ((windowRect.right - windowRect.left) - menuRect.right);
-  windowRect.bottom = windowRect.top + menuRect.bottom;
+  windowRect.bottom = windowRect.top + closeButtonRect.bottom;
   FillRect(hDC, &windowRect, (HBRUSH)GetStockObject(GRAY_BRUSH));
-  RenderViaDrawFrameControl(hDC, windowRect);
+  //RenderViaDrawFrameControl(hDC, windowRect);
+  RenderViaDrawThemeBackground(hWnd, hDC);
   ReleaseDC(hWnd, hDC);
 
   return NULL;
 }
 
+BOOL CalculateMinMaxCloseRect(HWND hWnd) {
+  // Get location of minimize/maximize/close buttons
+  // https://blogs.msdn.microsoft.com/oldnewthing/20140505-00/?p=1083
+  TITLEBARINFOEX info = { sizeof(info) };
+  if (!SendMessage(hWnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&info)) {
+    return FALSE;
+  }
+
+  // Size was obtained w/ SendMessage call w/ message type WM_GETTITLEBARINFOEX
+  // Could have alternatively gotton size/bounds via these methods:
+  // GetSystemMetrics - http://stackoverflow.com/questions/479332/how-to-get-size-and-position-of-window-caption-buttons-minimise-restore-close
+  // DwmGetWindowAttribute - https://msdn.microsoft.com/en-us/library/windows/desktop/aa969515(v=vs.85).aspx
+  int closeWidth = info.rgrect[DEMO_TITLE_BAR_CLOSE].right - info.rgrect[DEMO_TITLE_BAR_CLOSE].left;
+  int closeHeight = info.rgrect[DEMO_TITLE_BAR_CLOSE].bottom - info.rgrect[DEMO_TITLE_BAR_CLOSE].top;
+  int maximizeWidth = info.rgrect[DEMO_TITLE_BAR_MAXMIZE].right - info.rgrect[DEMO_TITLE_BAR_MAXMIZE].left;
+  int maximizeHeight = info.rgrect[DEMO_TITLE_BAR_MAXMIZE].bottom - info.rgrect[DEMO_TITLE_BAR_MAXMIZE].top;
+  int minimizeWidth = info.rgrect[DEMO_TITLE_BAR_MINIMIZE].right - info.rgrect[DEMO_TITLE_BAR_MINIMIZE].left;
+  int minimizeHeight = info.rgrect[DEMO_TITLE_BAR_MINIMIZE].bottom - info.rgrect[DEMO_TITLE_BAR_MINIMIZE].top;
+
+  RECT rectWindow;
+  GetWindowRect(hWnd, &rectWindow);
+
+  closeButtonRect.left = rectWindow.right - closeWidth;
+  closeButtonRect.right = rectWindow.right;
+  closeButtonRect.top = 0;
+  closeButtonRect.bottom = closeButtonRect.top + closeHeight;
+
+  maximizeButtonRect.right = closeButtonRect.left;
+  maximizeButtonRect.left = maximizeButtonRect.right - maximizeWidth;
+  maximizeButtonRect.top = 0;
+  maximizeButtonRect.bottom = maximizeButtonRect.top + maximizeHeight;
+
+  minimizeButtonRect.right = maximizeButtonRect.left;
+  minimizeButtonRect.left = minimizeButtonRect.right - minimizeWidth;
+  minimizeButtonRect.top = 0;
+  minimizeButtonRect.bottom = minimizeButtonRect.top + minimizeHeight;
+}
+
+//https://msdn.microsoft.com/en-us/library/windows/desktop/ms632606(v=vs.85).aspx
+LRESULT OnCalcSizeNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
+  CalculateMinMaxCloseRect(hWnd);
+
+  if (wParam) {
+    //the first rectangle contains the new coordinates of a window that has been moved or resized, that is, it is the proposed new window coordinates
+    //The second contains the coordinates of the window before it was moved or resized.
+    //The third contains the coordinates of the window's client area before the window was moved or resized.
+    //
+    //If the window is a child window, the coordinates are relative to the client area of the parent window.
+    //If the window is a top-level window, the coordinates are relative to the screen origin.
+    //
+    //When the window procedure returns, the first rectangle contains the coordinates of the new client rectangle resulting from the move or resize.
+    //The second rectangle contains the valid destination rectangle, and the third rectangle contains the valid source rectangle.
+    //The last two rectangles are used in conjunction with the return value of the WM_NCCALCSIZE message to determine the area of the window to be preserved.
+    //
+    NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
+    params->rgrc[0].top = closeButtonRect.bottom;
+    return WVR_VALIDRECTS;
+    //return DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
+
+  } else {
+    // On entry, the structure contains the proposed window rectangle for the window.
+    // On exit, the structure should contain the screen coordinates of the corresponding window client area.
+    RECT* rect = (LPRECT)lParam;
+    rect->top = closeButtonRect.bottom;
+    return WVR_VALIDRECTS;
+  }
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
-    case WM_SIZE: {
-      RECT rectClient;
-      GetClientRect(hWnd, &rectClient);
-      minimizeButtonRect.left = rectClient.right - 60;
-      minimizeButtonRect.right = rectClient.right - 40;
-      minimizeButtonRect.top = 0;
-      minimizeButtonRect.bottom = 20;
-      maximizeButtonRect.left = rectClient.right - 40;
-      maximizeButtonRect.right = rectClient.right - 20;
-      maximizeButtonRect.top = 0;
-      maximizeButtonRect.bottom = 20;
-      closeButtonRect.left = rectClient.right - 20;
-      closeButtonRect.right = rectClient.right;
-      closeButtonRect.top = 0;
-      closeButtonRect.bottom = 20;
-      } break;
+    case WM_SIZE:
+      CalculateMinMaxCloseRect(hWnd);
+      break;
+    case WM_NCCALCSIZE:
+      return OnCalcSizeNCA(hWnd, wParam, lParam);
     case WM_NCHITTEST:
       return OnHitTestNCA(hWnd, wParam, lParam);
     case WM_NCPAINT:
