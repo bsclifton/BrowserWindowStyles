@@ -28,11 +28,26 @@
 #define DEMO_TITLE_BAR_HELP 4
 #define DEMO_TITLE_BAR_CLOSE 5
 
-RECT minimizeButtonRect;
-RECT maximizeButtonRect;
-RECT closeButtonRect;
 RECT menuRect;
-HRGN menuRegion = NULL;
+
+typedef enum titlebarButtonTypeEnum {
+  TBB_MINIMIZE,
+  TBB_MAXIMIZE,
+  TBB_CLOSE
+} titlebarButtonType;
+typedef enum titlebarButtonStateEnum {
+  TBBS_REGULAR,
+  TBBS_HOVER,
+  TBBS_PRESSED
+} titlebarButtonState;
+class titlebarButton {
+public:
+  RECT clientRect;
+  RECT screenRect;
+  int state;
+};
+
+titlebarButton buttons[3];
 
 WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstring className) {
   WNDCLASSEX windowClass;
@@ -54,27 +69,6 @@ WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstri
   return RegisterClassEx(&windowClass);
 }
 
-void RenderViaDrawFrameControl(HDC hDC, RECT& rectClient) {
-  // DrawFrameControl - parts and states reference
-  // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773210(v=vs.85).aspx
-  DrawFrameControl(hDC, &minimizeButtonRect, DFC_CAPTION, DFCS_CAPTIONMIN);
-  DrawFrameControl(hDC, &maximizeButtonRect, DFC_CAPTION, DFCS_CAPTIONMAX);
-  DrawFrameControl(hDC, &closeButtonRect, DFC_CAPTION, DFCS_CAPTIONCLOSE);
-}
-
-void RenderViaDrawThemeBackground(HWND hWnd, HDC hDC) {
-  // Calls I discovered via:
-  // http://stackoverflow.com/questions/34004819/windows-10-close-minimize-and-maximize-buttons
-  // Reference:
-  // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
-  SetWindowTheme(hWnd, L"EXPLORER", NULL);
-  HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
-  DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, CBS_NORMAL, &closeButtonRect, NULL);
-  DrawThemeBackground(hTheme, hDC, WP_MAXBUTTON, MAXBS_NORMAL, &maximizeButtonRect, NULL);
-  DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, MINBS_NORMAL, &minimizeButtonRect, NULL);
-  CloseThemeData(hTheme);
-}
-
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms645618(v=vs.85).aspx
 LRESULT OnHitTestNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   RECT windowRect;
@@ -83,9 +77,9 @@ LRESULT OnHitTestNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   POINT point = { GET_X_LPARAM(lParam) - windowRect.left, GET_Y_LPARAM(lParam) - windowRect.top };
 
   if (PtInRect(&menuRect, point)) { return HTMENU; }
-  if (PtInRect(&closeButtonRect, point)) { return HTCLOSE; }
-  if (PtInRect(&maximizeButtonRect, point)) { return HTMAXBUTTON; }
-  if (PtInRect(&minimizeButtonRect, point)) { return HTMINBUTTON; }
+  if (PtInRect(&buttons[TBB_CLOSE].clientRect, point)) { return HTBORDER; }
+  if (PtInRect(&buttons[TBB_MAXIMIZE].clientRect, point)) { return HTBORDER; }
+  if (PtInRect(&buttons[TBB_MINIMIZE].clientRect, point)) { return HTBORDER; }
 
   RECT clientRect;
   GetClientRect(hWnd, &clientRect);
@@ -126,7 +120,7 @@ LRESULT OnPaint(HWND hWnd) {
 
 	RECT clientRect;
   GetClientRect(hWnd, &clientRect);
-  clientRect.top += menuRect.bottom;
+  //clientRect.top += menuRect.bottom;
 	FillRect(hDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
 	EndPaint(hWnd, &ps);
 
@@ -135,29 +129,98 @@ LRESULT OnPaint(HWND hWnd) {
 
 // https://msdn.microsoft.com/en-us/library/windows/desktop/dd145212(v=vs.85).aspx
 LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
-  // Force default painting for non-client area
-  LRESULT result = DefWindowProc(hWnd, WM_NCPAINT, wParam, lParam);
-  
   // Custom non-client area painting goes here
   RECT windowRect;
-  HRGN hrgn;
+  HRGN hRgn = NULL;
   GetWindowRect(hWnd, &windowRect);
   if (wParam == 1) {
-    hrgn = CreateRectRgnIndirect(&windowRect);
+    hRgn = CreateRectRgnIndirect(&windowRect);
   } else {
-    hrgn = (HRGN)wParam;
+    hRgn = (HRGN)wParam;
   }
 
-  // https://msdn.microsoft.com/en-us/library/windows/desktop/dd144873(v=vs.85).aspx
-  HDC hDC = GetDCEx(hWnd, hrgn, DCX_WINDOW | DCX_INTERSECTRGN);
-  windowRect.left = windowRect.right - ((windowRect.right - windowRect.left) - menuRect.right);
-  windowRect.bottom = windowRect.top + closeButtonRect.bottom;
-  FillRect(hDC, &windowRect, (HBRUSH)GetStockObject(GRAY_BRUSH));
-  //RenderViaDrawFrameControl(hDC, windowRect);
-  RenderViaDrawThemeBackground(hWnd, hDC);
-  ReleaseDC(hWnd, hDC);
+  if (hRgn) {
+    // Carve out the area for custom content
+    windowRect.left = windowRect.right - ((windowRect.right - windowRect.left) - menuRect.right);
+    windowRect.bottom = windowRect.top + 20;
+    HRGN minRgn = CreateRectRgnIndirect(&windowRect);
+    CombineRgn(hRgn, hRgn, minRgn, RGN_XOR);
+    DeleteObject(minRgn);
 
-  return NULL;
+    // Force default painting for non-client area
+    LRESULT ret = DefWindowProc(hWnd, WM_NCPAINT, (WPARAM)hRgn, 0);
+
+    // Paint into the area carved out above
+    HDC hDC = GetWindowDC(hWnd);
+    RECT blackout;
+    blackout.right = buttons[TBB_CLOSE].clientRect.right;
+    blackout.left = menuRect.right;
+    blackout.top = 0;
+    blackout.bottom = 20;
+    FillRect(hDC, &blackout, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+    // Calls I discovered via:
+    // http://stackoverflow.com/questions/34004819/windows-10-close-minimize-and-maximize-buttons
+    // Reference:
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
+    SetWindowTheme(hWnd, L"EXPLORER", NULL);
+    HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
+    DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, buttons[TBB_CLOSE].state, &buttons[TBB_CLOSE].clientRect, NULL);
+    DrawThemeBackground(hTheme, hDC, WP_MAXBUTTON, buttons[TBB_MAXIMIZE].state, &buttons[TBB_MAXIMIZE].clientRect, NULL);
+    DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, buttons[TBB_MINIMIZE].state, &buttons[TBB_MINIMIZE].clientRect, NULL);
+    CloseThemeData(hTheme);
+
+    ReleaseDC(hWnd, hDC);
+
+    if (wParam == 1) {
+      DeleteObject(hRgn);
+    }
+
+    return ret;
+  }
+
+  return DefWindowProc(hWnd, WM_NCPAINT, wParam, lParam);
+}
+
+static void RedrawNC(HWND hwnd) {
+  SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_DRAWFRAME);
+}
+
+//Huge props to http://www.catch22.net/tuts/custom-titlebar
+LRESULT OnButtonDownNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
+  RECT windowRect;
+  GetWindowRect(hWnd, &windowRect);
+
+  POINT point = { GET_X_LPARAM(lParam) - windowRect.left, GET_Y_LPARAM(lParam) - windowRect.top };
+
+  if (PtInRect(&buttons[TBB_CLOSE].clientRect, point)) {
+    buttons[TBB_CLOSE].state = CBS_PUSHED;
+    //SetCapture(hWnd);
+    RedrawNC(hWnd);
+    return 0;
+  } else {
+    buttons[TBB_CLOSE].state = CBS_NORMAL;
+  }
+
+  if (PtInRect(&buttons[TBB_MAXIMIZE].clientRect, point)) {
+    buttons[TBB_MAXIMIZE].state = MAXBS_PUSHED;
+    //SetCapture(hWnd);
+    RedrawNC(hWnd);
+    return 0;
+  } else {
+    buttons[TBB_MAXIMIZE].state = MAXBS_NORMAL;
+  }
+
+  if (PtInRect(&buttons[TBB_MINIMIZE].clientRect, point)) {
+    buttons[TBB_MINIMIZE].state = MINBS_PUSHED;
+    //SetCapture(hWnd);
+    RedrawNC(hWnd);
+    return 0;
+  } else {
+    buttons[TBB_MINIMIZE].state = MINBS_NORMAL;
+  }
+
+  return DefWindowProc(hWnd, WM_NCLBUTTONDOWN, wParam, lParam);
 }
 
 BOOL CalculateMinMaxCloseRect(HWND hWnd) {
@@ -167,71 +230,68 @@ BOOL CalculateMinMaxCloseRect(HWND hWnd) {
   if (!SendMessage(hWnd, WM_GETTITLEBARINFOEX, 0, (LPARAM)&info)) {
     return FALSE;
   }
+  //RECT buttonsRect;
+  //var sizeButtonsRect = Marshal.SizeOf(buttonsRect);
+  //DwmGetWindowAttribute(hWnd, DWMWA_CAPTION_BUTTON_BOUNDS, &buttonsRect, sizeof(buttonsRect));
 
   // Size was obtained w/ SendMessage call w/ message type WM_GETTITLEBARINFOEX
   // Could have alternatively gotton size/bounds via these methods:
   // GetSystemMetrics - http://stackoverflow.com/questions/479332/how-to-get-size-and-position-of-window-caption-buttons-minimise-restore-close
   // DwmGetWindowAttribute - https://msdn.microsoft.com/en-us/library/windows/desktop/aa969515(v=vs.85).aspx
   int closeWidth = info.rgrect[DEMO_TITLE_BAR_CLOSE].right - info.rgrect[DEMO_TITLE_BAR_CLOSE].left;
-  int closeHeight = info.rgrect[DEMO_TITLE_BAR_CLOSE].bottom - info.rgrect[DEMO_TITLE_BAR_CLOSE].top;
+  int closeHeight = 20; // info.rgrect[DEMO_TITLE_BAR_CLOSE].bottom - info.rgrect[DEMO_TITLE_BAR_CLOSE].top;
   int maximizeWidth = info.rgrect[DEMO_TITLE_BAR_MAXMIZE].right - info.rgrect[DEMO_TITLE_BAR_MAXMIZE].left;
-  int maximizeHeight = info.rgrect[DEMO_TITLE_BAR_MAXMIZE].bottom - info.rgrect[DEMO_TITLE_BAR_MAXMIZE].top;
+  int maximizeHeight = 20;// info.rgrect[DEMO_TITLE_BAR_MAXMIZE].bottom - info.rgrect[DEMO_TITLE_BAR_MAXMIZE].top;
   int minimizeWidth = info.rgrect[DEMO_TITLE_BAR_MINIMIZE].right - info.rgrect[DEMO_TITLE_BAR_MINIMIZE].left;
-  int minimizeHeight = info.rgrect[DEMO_TITLE_BAR_MINIMIZE].bottom - info.rgrect[DEMO_TITLE_BAR_MINIMIZE].top;
+  int minimizeHeight = 20;// info.rgrect[DEMO_TITLE_BAR_MINIMIZE].bottom - info.rgrect[DEMO_TITLE_BAR_MINIMIZE].top;
 
-  RECT rectWindow;
-  GetWindowRect(hWnd, &rectWindow);
+  RECT clientRect;
+  GetClientRect(hWnd, &clientRect);
 
-  closeButtonRect.left = rectWindow.right - closeWidth;
-  closeButtonRect.right = rectWindow.right;
-  closeButtonRect.top = 0;
-  closeButtonRect.bottom = closeButtonRect.top + closeHeight;
+  RECT* p = &buttons[TBB_CLOSE].clientRect;
+  p->left = clientRect.right - closeWidth;
+  p->right = clientRect.right;
+  p->top = 0;
+  p->bottom = p->top + closeHeight;
 
-  maximizeButtonRect.right = closeButtonRect.left;
-  maximizeButtonRect.left = maximizeButtonRect.right - maximizeWidth;
-  maximizeButtonRect.top = 0;
-  maximizeButtonRect.bottom = maximizeButtonRect.top + maximizeHeight;
+  RECT* p2 = &buttons[TBB_MAXIMIZE].clientRect;
+  p2->right = p->left;
+  p2->left = p2->right - maximizeWidth;
+  p2->top = 0;
+  p2->bottom = p2->top + maximizeHeight;
 
-  minimizeButtonRect.right = maximizeButtonRect.left;
-  minimizeButtonRect.left = minimizeButtonRect.right - minimizeWidth;
-  minimizeButtonRect.top = 0;
-  minimizeButtonRect.bottom = minimizeButtonRect.top + minimizeHeight;
+  p = &buttons[TBB_MINIMIZE].clientRect;
+  p->right = p2->left;
+  p->left = p->right - minimizeWidth;
+  p->top = 0;
+  p->bottom = p->top + minimizeHeight;
+
+  RECT windowRect;
+  GetWindowRect(hWnd, &windowRect);
+
+  CopyRect(&buttons[TBB_MINIMIZE].screenRect, &buttons[TBB_MINIMIZE].clientRect);
+  OffsetRect(&buttons[TBB_MINIMIZE].screenRect, windowRect.left, windowRect.top);
+
+  CopyRect(&buttons[TBB_MAXIMIZE].screenRect, &buttons[TBB_MAXIMIZE].clientRect);
+  OffsetRect(&buttons[TBB_MAXIMIZE].screenRect, windowRect.left, windowRect.top);
+
+  CopyRect(&buttons[TBB_CLOSE].screenRect, &buttons[TBB_CLOSE].clientRect);
+  OffsetRect(&buttons[TBB_CLOSE].screenRect, windowRect.left, windowRect.top);
+
+  return TRUE;
 }
 
 //https://msdn.microsoft.com/en-us/library/windows/desktop/ms632606(v=vs.85).aspx
 LRESULT OnCalcSizeNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   CalculateMinMaxCloseRect(hWnd);
-
-  if (wParam) {
-    //the first rectangle contains the new coordinates of a window that has been moved or resized, that is, it is the proposed new window coordinates
-    //The second contains the coordinates of the window before it was moved or resized.
-    //The third contains the coordinates of the window's client area before the window was moved or resized.
-    //
-    //If the window is a child window, the coordinates are relative to the client area of the parent window.
-    //If the window is a top-level window, the coordinates are relative to the screen origin.
-    //
-    //When the window procedure returns, the first rectangle contains the coordinates of the new client rectangle resulting from the move or resize.
-    //The second rectangle contains the valid destination rectangle, and the third rectangle contains the valid source rectangle.
-    //The last two rectangles are used in conjunction with the return value of the WM_NCCALCSIZE message to determine the area of the window to be preserved.
-    //
-    NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
-    params->rgrc[0].top = closeButtonRect.bottom;
-    return WVR_VALIDRECTS;
-    //return DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
-
-  } else {
-    // On entry, the structure contains the proposed window rectangle for the window.
-    // On exit, the structure should contain the screen coordinates of the corresponding window client area.
-    RECT* rect = (LPRECT)lParam;
-    rect->top = closeButtonRect.bottom;
-    return WVR_VALIDRECTS;
-  }
+  return DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
     case WM_SIZE:
       CalculateMinMaxCloseRect(hWnd);
+      RedrawNC(hWnd);
       break;
     case WM_NCCALCSIZE:
       return OnCalcSizeNCA(hWnd, wParam, lParam);
@@ -239,6 +299,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       return OnHitTestNCA(hWnd, wParam, lParam);
     case WM_NCPAINT:
       return OnPaintNCA(hWnd, wParam, lParam);
+    case WM_NCLBUTTONDOWN:
+      return OnButtonDownNCA(hWnd, wParam, lParam);
     case WM_PAINT:
       return OnPaint(hWnd);
 
@@ -299,6 +361,10 @@ void AppendEditMenu(HMENU parentMenu) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
   WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME);
+
+  buttons[TBB_MINIMIZE].state = MINBS_NORMAL;
+  buttons[TBB_MAXIMIZE].state = MAXBS_NORMAL;
+  buttons[TBB_CLOSE].state = CBS_NORMAL;
 
   menuRect.left = 0;
   menuRect.bottom = GetSystemMetrics(SM_CYMENU);
