@@ -33,6 +33,7 @@ extern BOOL CalculateMinMaxCloseRect(HWND hWnd);
 titlebarButton buttons[3];
 UINT buttonCommandIds[3] = { 999990, 999991, 999992 };
 bool maximized;
+bool active;
 
 LRESULT OnPaint(HWND hWnd) {
 	PAINTSTRUCT ps;
@@ -70,6 +71,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     // be repainted, so we have to handle all three to properly
     // support inserted buttons
     case WM_NCACTIVATE:
+      active = (wParam != WA_INACTIVE);
       return OnPaintNCA(hWnd, wParam, lParam);
     case WM_SETTEXT:
       return OnPaintNCA(hWnd, wParam, lParam);

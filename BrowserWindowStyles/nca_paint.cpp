@@ -6,6 +6,7 @@
 
 extern titlebarButton buttons[3];
 extern bool maximized;
+extern bool active;
 extern RECT menuRect;
 
 void RedrawNC(HWND hwnd) {
@@ -50,31 +51,48 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
     SetWindowTheme(hWnd, L"EXPLORER", NULL);
     HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
 
-    int partState = buttons[TBB_MINIMIZE].pressed
-      ? MINBS_PUSHED
+    // This code is bad and I feel like a horrible person
+    int partState = active
+      ? buttons[TBB_MINIMIZE].pressed
+        ? MINBS_PUSHED
+        : buttons[TBB_MINIMIZE].hovering
+          ? MINBS_HOT
+          : MINBS_NORMAL
       : buttons[TBB_MINIMIZE].hovering
         ? MINBS_HOT
-        : MINBS_NORMAL;
+        : MINBS_DISABLED;
     DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, partState, &buttons[TBB_MINIMIZE].clientRect, NULL);
 
     partState = maximized
-      ? buttons[TBB_MAXIMIZE].pressed
-        ? RBS_PUSHED
+      ? active
+        ? buttons[TBB_MAXIMIZE].pressed
+          ? RBS_PUSHED
+          : buttons[TBB_MAXIMIZE].hovering
+            ? RBS_HOT
+            : RBS_NORMAL
         : buttons[TBB_MAXIMIZE].hovering
           ? RBS_HOT
-          : RBS_NORMAL
-      : buttons[TBB_MAXIMIZE].pressed
+          : RBS_DISABLED
+    : active
+      ? buttons[TBB_MAXIMIZE].pressed
         ? MAXBS_PUSHED
         : buttons[TBB_MAXIMIZE].hovering
           ? MAXBS_HOT
-          : MAXBS_NORMAL;
+          : MAXBS_NORMAL
+      : buttons[TBB_MAXIMIZE].hovering
+        ? MAXBS_HOT
+        : MAXBS_DISABLED;
     DrawThemeBackground(hTheme, hDC, maximized ? WP_RESTOREBUTTON : WP_MAXBUTTON, partState, &buttons[TBB_MAXIMIZE].clientRect, NULL);
 
-    partState = buttons[TBB_CLOSE].pressed
-      ? CBS_PUSHED
+    partState = active
+      ? buttons[TBB_CLOSE].pressed
+        ? CBS_PUSHED
+        : buttons[TBB_CLOSE].hovering
+          ? CBS_HOT
+          : CBS_NORMAL
       : buttons[TBB_CLOSE].hovering
         ? CBS_HOT
-        : CBS_NORMAL;
+        : CBS_DISABLED;
     DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, partState, &buttons[TBB_CLOSE].clientRect, NULL);
 
     CloseThemeData(hTheme);
