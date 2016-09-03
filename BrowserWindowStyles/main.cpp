@@ -16,7 +16,7 @@ WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstri
 // globals
 // > menu
 extern RECT menuRect;
-extern void AddMenus(HMENU parentMenu);
+extern void CreateMenus(HMENU parentMenu);
 extern LRESULT OnMenu(HWND hWnd, WPARAM wParam, LPARAM lParam);
 // > non-client area (mouse)
 extern LRESULT OnLButtonDownNCA(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -114,13 +114,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
   WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME);
 
-  menuRect.left = 0;
-  menuRect.bottom = GetSystemMetrics(SM_CYMENU);
-  menuRect.top = 0;
-  menuRect.right = 380; //TODO: get proper menu size
-
   HMENU menu = CreateMenu();
-  AddMenus(menu);
+  CreateMenus(menu);
 
   HWND hWnd = CreateWindowEx(
     WS_EX_LEFT,

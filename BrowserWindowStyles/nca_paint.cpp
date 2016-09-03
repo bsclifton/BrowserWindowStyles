@@ -1,6 +1,7 @@
 #include "main.h"
 #include <Dwmapi.h>
 #include <vssym32.h>
+#include <vsstyle.h>
 
 #pragma comment(lib, "UxTheme.lib")
 
@@ -41,7 +42,7 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
     blackout.right = buttons[TBB_CLOSE].clientRect.right;
     blackout.left = menuRect.right;
     blackout.top = 0;
-    blackout.bottom = 20;
+    blackout.bottom = menuRect.bottom;
     FillRect(hDC, &blackout, (HBRUSH)GetStockObject(BLACK_BRUSH));
 
     // Calls I discovered via:
@@ -50,6 +51,7 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
     // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
     SetWindowTheme(hWnd, L"EXPLORER", NULL);
     HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
+    //HTHEME hTheme = OpenThemeData(hWnd, L"DWMWINDOW");
 
     // This code is bad and I feel like a horrible person
     int partState = active

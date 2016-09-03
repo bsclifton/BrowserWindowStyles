@@ -15,7 +15,12 @@ void AppendHelpMenu(HMENU parentMenu);
 //Menu functions
 //https://msdn.microsoft.com/en-us/library/windows/desktop/ff468865(v=vs.85).aspx
 
-void AddMenus(HMENU parentMenu) {
+void CreateMenus(HMENU parentMenu) {
+  menuRect.left = 0;
+  menuRect.bottom = GetSystemMetrics(SM_CYMENU);
+  menuRect.top = 0;
+  menuRect.right = 380; //TODO: get proper menu size
+
   AppendFileMenu(parentMenu);
   AppendEditMenu(parentMenu);
   AppendMenu(parentMenu, NULL, NULL, L"View");
