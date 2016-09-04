@@ -22,7 +22,7 @@
     <ProjectGuid>{292625A0-80C9-4F07-BB5D-9958A8A5CB18}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>BrowserWindowStyles</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.10586.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -106,6 +106,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>Comctl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -152,6 +153,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="main.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="BrowserWindowStyles.exe.manifest">
+      <DeploymentContent>true</DeploymentContent>
+    </Manifest>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -3,8 +3,6 @@
 #include <vssym32.h>
 #include <vsstyle.h>
 
-#pragma comment(lib, "UxTheme.lib")
-
 extern titlebarButton buttons[3];
 extern bool maximized;
 extern bool active;

@@ -1,5 +1,9 @@
 #include "main.h"
 #include <string>
+#include <commctrl.h>
+
+#pragma comment(lib, "UxTheme.lib")
+#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 // Demo to test win32 styles in preperation for updating Brave look/feel on Windows
 // HUGE props to the guy that wrote this http://www.catch22.net/tuts/custom-titlebar
@@ -113,6 +117,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
   WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME);
+
+  InitCommonControls();
+
+  //HMODULE themeFile = LoadLibraryEx(TEXT("C:\\Windows\\Resources\\Themes\\aero\\aero.msstyles"), NULL, LOAD_LIBRARY_AS_DATAFILE);
 
   HMENU menu = CreateMenu();
   CreateMenus(menu);
