@@ -122,6 +122,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   //HMODULE themeFile = LoadLibraryEx(TEXT("C:\\Windows\\Resources\\Themes\\aero\\aero.msstyles"), NULL, LOAD_LIBRARY_AS_DATAFILE);
 
+  OSVERSIONINFO osvi;
+  BOOL bIsWindowsXPorLater;
+
+  ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+  osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+
+  GetVersionEx(&osvi);
+
   HMENU menu = CreateMenu();
   CreateMenus(menu);
 
