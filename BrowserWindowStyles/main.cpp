@@ -3,14 +3,7 @@
 #include <commctrl.h>
 
 #pragma comment(lib, "UxTheme.lib")
-#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
-// Demo to test win32 styles in preperation for updating Brave look/feel on Windows
-// HUGE props to the guy that wrote this http://www.catch22.net/tuts/custom-titlebar
-// Other helpful links:
-// https://msdn.microsoft.com/en-us/library/bb384843.aspx
-// https://msdn.microsoft.com/en-us/library/bb688195(VS.85).aspx
-// http://www.winprog.org/tutorial/menus.html
 #define DEMO_WINDOW_CLASS_NAME L"BrowserWindowStyles"
 #define DEMO_WINDOW_TITLE L"Brave"
 
@@ -38,6 +31,17 @@ titlebarButton buttons[3];
 UINT buttonCommandIds[3] = { 999990, 999991, 999992 };
 bool maximized;
 bool active;
+HMODULE themeFile;
+
+bool IsWindows10() {
+  OSVERSIONINFO osvi;
+
+  ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+  osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+  GetVersionEx(&osvi);
+
+  return osvi.dwMajorVersion == 10;
+}
 
 LRESULT OnPaint(HWND hWnd) {
 	PAINTSTRUCT ps;
@@ -53,7 +57,9 @@ LRESULT OnPaint(HWND hWnd) {
 
 //https://msdn.microsoft.com/en-us/library/windows/desktop/ms632606(v=vs.85).aspx
 LRESULT OnCalcSizeNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
+  // NOTE: this method only overridden currently to calculate the min/max/close RECT sizes
   CalculateMinMaxCloseRect(hWnd);
+  // default behavior
   return DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
 }
 
@@ -118,17 +124,23 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
   WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME);
 
+  // Findings regarding manifest and enabling of Visual Styles
+  // https://msdn.microsoft.com/en-us/library/windows/desktop/dn481241(v=vs.85).aspx
+  // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773175(v=vs.85).aspx
+  // 
+  // The application manifest is required in order for GetVersionEx to properly return info about Windows 10.
+  // If absent, the app will always detect major=6, minor=2, build=9200 on Windows 10.
+  //
+  // Common Controls 6 is enabled by
+  // - linking to Comctl32.lib (see project properties > Linker > Input)
+  // - calling InitCommonControls()
+  // - Adding a dependency entry into the application manifest, specifying version 6
   InitCommonControls();
+  bool isWindows10 = IsWindows10();
 
-  //HMODULE themeFile = LoadLibraryEx(TEXT("C:\\Windows\\Resources\\Themes\\aero\\aero.msstyles"), NULL, LOAD_LIBRARY_AS_DATAFILE);
-
-  OSVERSIONINFO osvi;
-  BOOL bIsWindowsXPorLater;
-
-  ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
-  osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-  GetVersionEx(&osvi);
+  // Since the above does not seem to work, my next approach will be to try to get
+  // the bitmaps from the msstyles file on disk.
+  themeFile = LoadLibraryEx(TEXT("C:\\Windows\\Resources\\Themes\\aero\\aero.msstyles"), NULL, LOAD_LIBRARY_AS_DATAFILE);
 
   HMENU menu = CreateMenu();
   CreateMenus(menu);

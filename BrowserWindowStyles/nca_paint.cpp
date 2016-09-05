@@ -49,7 +49,6 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
     // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
     SetWindowTheme(hWnd, L"EXPLORER", NULL);
     HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
-    //HTHEME hTheme = OpenThemeData(hWnd, L"DWMWINDOW");
 
     // This code is bad and I feel like a horrible person
     int partState = active
