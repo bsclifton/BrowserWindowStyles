@@ -3,12 +3,14 @@
 #include <commctrl.h>
 
 #pragma comment(lib, "UxTheme.lib")
+#pragma comment(lib, "Dwmapi.lib")
 
 #define DEMO_WINDOW_CLASS_NAME L"BrowserWindowStyles"
+#define DEMO_WINDOW_CLASS_NAME2 L"BrowserWindowStyles2"
 #define DEMO_WINDOW_TITLE L"Brave"
 
 // prototypes
-WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstring className);
+WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstring className, HBRUSH brush);
 
 // globals
 // > menu
@@ -32,6 +34,7 @@ UINT buttonCommandIds[3] = { 999990, 999991, 999992 };
 bool maximized;
 bool active;
 HMODULE themeFile;
+HWND hackWindow;
 
 bool IsWindows10() {
   OSVERSIONINFO osvi;
@@ -50,6 +53,7 @@ LRESULT OnPaint(HWND hWnd) {
 	RECT clientRect;
   GetClientRect(hWnd, &clientRect);
 	FillRect(hDC, &clientRect, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
 	EndPaint(hWnd, &ps);
 
 	return NULL;
@@ -62,6 +66,11 @@ LRESULT OnCalcSizeNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   // default behavior
   return DefWindowProc(hWnd, WM_NCCALCSIZE, wParam, lParam);
 }
+
+LRESULT CALLBACK WndProc2(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  return DefWindowProc(hWnd, uMsg, wParam, lParam);
+}
+
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
@@ -122,7 +131,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-  WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME);
+  WORD result = initializeWindowClass(WndProc, hInstance, DEMO_WINDOW_CLASS_NAME, NULL);
+  result = initializeWindowClass(WndProc2, hInstance, DEMO_WINDOW_CLASS_NAME2, (HBRUSH)GetStockObject(GRAY_BRUSH));
 
   // Findings regarding manifest and enabling of Visual Styles
   // https://msdn.microsoft.com/en-us/library/windows/desktop/dn481241(v=vs.85).aspx
@@ -140,7 +150,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
   // Since the above does not seem to work, my next approach will be to try to get
   // the bitmaps from the msstyles file on disk.
-  themeFile = LoadLibraryEx(TEXT("C:\\Windows\\Resources\\Themes\\aero\\aero.msstyles"), NULL, LOAD_LIBRARY_AS_DATAFILE);
+  //themeFile = LoadLibraryEx(TEXT("C:\\Windows\\Resources\\Themes\\aero\\aero.msstyles"), NULL, LOAD_LIBRARY_AS_DATAFILE);
 
   HMENU menu = CreateMenu();
   CreateMenus(menu);
@@ -158,6 +168,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     menu,
     hInstance, 0);
 
+
+  hackWindow = CreateWindowEx(
+    WS_EX_LEFT,
+    DEMO_WINDOW_CLASS_NAME2,
+    DEMO_WINDOW_TITLE,
+    WS_CAPTION | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU,
+    0,
+    0,
+    640,
+    480,
+    HWND_DESKTOP,
+    NULL,
+    hInstance, 0);
+
   ShowWindow(hWnd, nCmdShow);
   UpdateWindow(hWnd);
 
@@ -170,10 +194,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
   DestroyWindow(hWnd);
   UnregisterClass(DEMO_WINDOW_CLASS_NAME, hInstance);
 
+  //FreeLibrary(themeFile);
+
   return (int)msg.wParam;
 }
 
-WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstring className) {
+WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstring className, HBRUSH brush) {
   WNDCLASSEX windowClass;
 
   memset(&windowClass, 0, sizeof(WNDCLASSEX));
@@ -186,7 +212,7 @@ WORD initializeWindowClass(WNDPROC eventHandler, HINSTANCE hInstance, std::wstri
   windowClass.hInstance = hInstance;
   windowClass.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
   windowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-  windowClass.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+  windowClass.hbrBackground = brush ? brush : (HBRUSH)GetStockObject(BLACK_BRUSH);
   windowClass.lpszClassName = className.c_str();
   windowClass.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_APPLICATION));
 

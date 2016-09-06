@@ -7,6 +7,7 @@ extern titlebarButton buttons[3];
 extern bool maximized;
 extern bool active;
 extern RECT menuRect;
+extern HWND hackWindow;
 
 void RedrawNC(HWND hwnd) {
   SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_DRAWFRAME);
@@ -24,8 +25,21 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
   }
 
   if (hRgn) {
+    RECT clientRect;
+    GetClientRect(hWnd, &clientRect);
+
+    RECT captionAreaRect;
+    DwmGetWindowAttribute(hackWindow, DWMWA_CAPTION_BUTTON_BOUNDS, &captionAreaRect, sizeof(RECT));
+
+    int controlWidth = captionAreaRect.right - captionAreaRect.left;
+    int controlHeight = captionAreaRect.bottom - captionAreaRect.top;
+    int srcBorderTop = 1;
+    int dstWindowWidth = windowRect.right - windowRect.left;
+    int dstX = clientRect.right - controlWidth;
+    int frameWidth = GetSystemMetrics(SM_CXFIXEDFRAME);
+
     // Carve out the area for custom content
-    windowRect.left = windowRect.right - ((windowRect.right - windowRect.left) - menuRect.right);
+    windowRect.left = windowRect.right - controlWidth;
     windowRect.bottom = windowRect.top + 20;
     HRGN minRgn = CreateRectRgnIndirect(&windowRect);
     CombineRgn(hRgn, hRgn, minRgn, RGN_XOR);
@@ -33,68 +47,83 @@ LRESULT OnPaintNCA(HWND hWnd, WPARAM wParam, LPARAM lParam) {
 
     // Force default painting for non-client area
     LRESULT ret = DefWindowProc(hWnd, WM_NCPAINT, (WPARAM)hRgn, 0);
+    
+    // copy bitmaps from other window- may work after reading
+    // https://stackoverflow.com/questions/242570/copying-content-from-a-hidden-or-clipped-window-in-xp
+    // https://msdn.microsoft.com/en-us/library/windows/desktop/dd183402(v=vs.85).aspx
+    ShowWindow(hackWindow, SW_SHOWNORMAL);
+    RECT hackWindowRect;
+    GetWindowRect(hackWindow, &hackWindowRect);
 
-    // black background into the area carved out above
+    int srcWindowWidth = hackWindowRect.right - hackWindowRect.left;
+
     HDC hDC = GetWindowDC(hWnd);
-    RECT blackout;
-    blackout.right = buttons[TBB_CLOSE].clientRect.right;
-    blackout.left = menuRect.right;
-    blackout.top = 0;
-    blackout.bottom = menuRect.bottom;
-    FillRect(hDC, &blackout, (HBRUSH)GetStockObject(BLACK_BRUSH));
+    HDC hdcWindow = GetWindowDC(hackWindow);
 
-    // Calls I discovered via:
-    // http://stackoverflow.com/questions/34004819/windows-10-close-minimize-and-maximize-buttons
-    // Reference:
-    // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
-    SetWindowTheme(hWnd, L"EXPLORER", NULL);
-    HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
+    BitBlt(hDC,
+      dstX, 0,
+      controlWidth, controlHeight,
+      hdcWindow,
+      (srcWindowWidth - controlWidth - frameWidth), srcBorderTop,
+      SRCCOPY);
 
-    // This code is bad and I feel like a horrible person
-    int partState = active
-      ? buttons[TBB_MINIMIZE].pressed
-        ? MINBS_PUSHED
-        : buttons[TBB_MINIMIZE].hovering
-          ? MINBS_HOT
-          : MINBS_NORMAL
-      : buttons[TBB_MINIMIZE].hovering
-        ? MINBS_HOT
-        : MINBS_DISABLED;
-    DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, partState, &buttons[TBB_MINIMIZE].clientRect, NULL);
+    ReleaseDC(hWnd, hdcWindow);
 
-    partState = maximized
-      ? active
-        ? buttons[TBB_MAXIMIZE].pressed
-          ? RBS_PUSHED
-          : buttons[TBB_MAXIMIZE].hovering
-            ? RBS_HOT
-            : RBS_NORMAL
-        : buttons[TBB_MAXIMIZE].hovering
-          ? RBS_HOT
-          : RBS_DISABLED
-    : active
-      ? buttons[TBB_MAXIMIZE].pressed
-        ? MAXBS_PUSHED
-        : buttons[TBB_MAXIMIZE].hovering
-          ? MAXBS_HOT
-          : MAXBS_NORMAL
-      : buttons[TBB_MAXIMIZE].hovering
-        ? MAXBS_HOT
-        : MAXBS_DISABLED;
-    DrawThemeBackground(hTheme, hDC, maximized ? WP_RESTOREBUTTON : WP_MAXBUTTON, partState, &buttons[TBB_MAXIMIZE].clientRect, NULL);
+    ShowWindow(hackWindow, SW_HIDE);
 
-    partState = active
-      ? buttons[TBB_CLOSE].pressed
-        ? CBS_PUSHED
-        : buttons[TBB_CLOSE].hovering
-          ? CBS_HOT
-          : CBS_NORMAL
-      : buttons[TBB_CLOSE].hovering
-        ? CBS_HOT
-        : CBS_DISABLED;
-    DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, partState, &buttons[TBB_CLOSE].clientRect, NULL);
 
-    CloseThemeData(hTheme);
+    //// Calls I discovered via:
+    //// http://stackoverflow.com/questions/34004819/windows-10-close-minimize-and-maximize-buttons
+    //// Reference:
+    //// https://msdn.microsoft.com/en-us/library/windows/desktop/bb773289(v=vs.85).aspx
+    //SetWindowTheme(hWnd, L"EXPLORER", NULL);
+    //HTHEME hTheme = OpenThemeData(hWnd, L"WINDOW");
+
+    //// This code is bad and I feel like a horrible person
+    //int partState = active
+    //  ? buttons[TBB_MINIMIZE].pressed
+    //    ? MINBS_PUSHED
+    //    : buttons[TBB_MINIMIZE].hovering
+    //      ? MINBS_HOT
+    //      : MINBS_NORMAL
+    //  : buttons[TBB_MINIMIZE].hovering
+    //    ? MINBS_HOT
+    //    : MINBS_DISABLED;
+    //DrawThemeBackground(hTheme, hDC, WP_MINBUTTON, partState, &buttons[TBB_MINIMIZE].clientRect, NULL);
+
+    //partState = maximized
+    //  ? active
+    //    ? buttons[TBB_MAXIMIZE].pressed
+    //      ? RBS_PUSHED
+    //      : buttons[TBB_MAXIMIZE].hovering
+    //        ? RBS_HOT
+    //        : RBS_NORMAL
+    //    : buttons[TBB_MAXIMIZE].hovering
+    //      ? RBS_HOT
+    //      : RBS_DISABLED
+    //: active
+    //  ? buttons[TBB_MAXIMIZE].pressed
+    //    ? MAXBS_PUSHED
+    //    : buttons[TBB_MAXIMIZE].hovering
+    //      ? MAXBS_HOT
+    //      : MAXBS_NORMAL
+    //  : buttons[TBB_MAXIMIZE].hovering
+    //    ? MAXBS_HOT
+    //    : MAXBS_DISABLED;
+    //DrawThemeBackground(hTheme, hDC, maximized ? WP_RESTOREBUTTON : WP_MAXBUTTON, partState, &buttons[TBB_MAXIMIZE].clientRect, NULL);
+
+    //partState = active
+    //  ? buttons[TBB_CLOSE].pressed
+    //    ? CBS_PUSHED
+    //    : buttons[TBB_CLOSE].hovering
+    //      ? CBS_HOT
+    //      : CBS_NORMAL
+    //  : buttons[TBB_CLOSE].hovering
+    //    ? CBS_HOT
+    //    : CBS_DISABLED;
+    //DrawThemeBackground(hTheme, hDC, WP_CLOSEBUTTON, partState, &buttons[TBB_CLOSE].clientRect, NULL);
+
+    //CloseThemeData(hTheme);
 
     ReleaseDC(hWnd, hDC);
 
